@@ -3,7 +3,6 @@ using TMPro;
 
 public class GunSystem : MonoBehaviour
 {
-
     //Gun stats
     public int damage;
     public PlayerMotor Motor;
@@ -14,15 +13,12 @@ public class GunSystem : MonoBehaviour
     public int ammoReserves = 150;
     public int ammoReservesModifier;
     public int shotsFired;
-    public float jumpSprayMulti = 2f;
-    public float crouchSprayMulti = 0.5f;
-    public float walkSprayMulti = 1f;
     public float sprayMulti;
-    public AnimationCurve sprayOverTime;
     public float sprayTimer = 0f;
- 
+    public float recoilResetTime = 1f;
 
-    public enum moveTypeData
+
+    public enum moveTypeData //enum to define move 
     {
         Walk,
         Run,
@@ -33,13 +29,18 @@ public class GunSystem : MonoBehaviour
     public moveTypeData moveType;
 
     //bools 
-    bool shooting, readyToShoot, reloading;
+    public bool shooting, readyToShoot, reloading;
 
     //Reference
-    public Camera fpsCam;
+    public Camera playerCam;
+    public Transform recoilPoint;
     public Transform attackPoint;
     public RaycastHit rayHit;
-    //public LayerMask whatIsEnemy;
+     
+    
+    // Fixed recoil pattern
+    public Vector2[] recoilPattern;
+    private int recoilIndex = 0;
 
     //Graphics
     public GameObject muzzleFlash, bulletHoleGraphic;
@@ -50,37 +51,33 @@ public class GunSystem : MonoBehaviour
     {
         bulletsLeft = magazineSize;
         readyToShoot = true;
-        //Motor = GetComponent<PlayerMotor>();
-
     }
+
     private void Update()
     {
+        MyInput();
+       
+
+        //(sprayTimer);
 
         // Counting time between last bullet shot
-        if (sprayTimer < 2f)
+        if (sprayTimer < recoilResetTime && readyToShoot == true)
         {
             sprayTimer += Time.deltaTime;
+        }
+        else if(readyToShoot == false)
+        {
+            sprayTimer = 0f;
             
         }
         else
         {
-            sprayTimer = 0f;
+            recoilIndex = 0; // Reset the recoil pattern after recoilResetTime seconds of not shooting
         }
-
-
-        MyInput();
-
-        sprayTimer += Time.deltaTime;
-
-        print(sprayTimer);
-
-
-        shotsFired = magazineSize - bulletsLeft;
-        
-
-        //SetText
+        //Set ammo Counter
         text.SetText(bulletsLeft + " / " + ammoReserves);
     }
+
     private void MyInput()
     {
         if (allowButtonHold) shooting = Input.GetKey(KeyCode.Mouse0);
@@ -94,42 +91,43 @@ public class GunSystem : MonoBehaviour
             bulletsShot = bulletsPerTap;
             Shoot();
         }
-        
     }
+
     private void Shoot()
     {
         readyToShoot = false;
 
-        int totalShotsFired = magazineSize - bulletsLeft;
-       
-        
+        shotsFired = magazineSize - bulletsLeft;
 
+        // Get the next value in the recoil pattern
+        Vector2 recoilOffset = recoilPoint.transform.position;
+        print(recoilOffset);
+        if (recoilPattern.Length > 0)
+        {
+            recoilOffset = recoilPattern[recoilIndex];
+            recoilIndex = (recoilIndex + 1) % recoilPattern.Length;
+        }
 
+        // Calculate the shoot direction relative to the camera
+        Vector3 cameraForward = playerCam.transform.forward;
+        Vector3 cameraRight = playerCam.transform.right;
+        Vector3 shootDirection = cameraForward + cameraRight * recoilOffset.x * sprayMulti + playerCam.transform.up * recoilOffset.y * sprayMulti;
+        shootDirection.Normalize();
+        playerCam.gameObject.transform.LookAt(playerCam.transform.position + shootDirection);
 
+        Ray ray = new Ray(playerCam.transform.position, shootDirection);
 
-
-
-        //float x = Random.Range(-spread * Motor.velocityMagnitude * sprayMulti, spread * Motor.velocityMagnitude * sprayMulti);
-        //float y = Random.Range(-spread * Motor.velocityMagnitude * sprayMulti, spread * Motor.velocityMagnitude * sprayMulti);
-
-        
-        //Vector3 direction = fpsCam.transform.forward + new Vector3(recoil.x, recoil.y, 0);
-
-        //RayCast
-        //if (Physics.Raycast(fpsCam.transform.position, direction, out rayHit, range))
-        //{
-           //print(rayHit.collider.name);
-           
-
+        if (Physics.Raycast(ray, out rayHit, range))
+        {
             //if (rayHit.collider.CompareTag("Enemy"))
-                //// ADD DAMAGE HERE WHEN OTHER PLAYERS ARE ADDED
-        //}
-
-        
+            //{
+            // Add damage to enemy here
+            //}
+        }
 
         //Graphics
         Instantiate(bulletHoleGraphic, rayHit.point, Quaternion.Euler(0, 180, 0));
-        //Instantiate(muzzleFlash, attackPoint.position, Quaternion.identity);
+
 
         bulletsLeft--;
         bulletsShot--;
@@ -139,18 +137,20 @@ public class GunSystem : MonoBehaviour
         if (bulletsShot > 0 && bulletsLeft > 0)
             Invoke("Shoot", timeBetweenShots);
     }
+
+
     private void ResetShot()
     {
         readyToShoot = true;
-        
-        
     }
     private void Reload()
     {
         reloading = true;
         Invoke("ReloadFinished", reloadTime);
-        
+
     }
+
+
     private void ReloadFinished()
     {
         bulletsLeft = magazineSize;

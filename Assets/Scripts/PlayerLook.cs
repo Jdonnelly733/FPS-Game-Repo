@@ -7,6 +7,7 @@ public class PlayerLook : MonoBehaviour
     public Camera cam;
     public float xSensitivity;
     public float ySensitivity;
+    public GunSystem Gun;
 
     public Transform orientation;
 
@@ -21,11 +22,12 @@ public class PlayerLook : MonoBehaviour
         yRotation += mouseX;
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
-
-        transform.rotation = Quaternion.Euler(xRotation, yRotation, 0);
-        orientation.rotation = Quaternion.Euler(0, yRotation, 0);
+        if (Gun.readyToShoot == true)
+        {
+            transform.rotation = Quaternion.Euler(xRotation, yRotation, 0);
+            orientation.rotation = Quaternion.Euler(0, yRotation, 0);
+        }
        
-
     }
 
 
