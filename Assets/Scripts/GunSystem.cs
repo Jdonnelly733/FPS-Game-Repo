@@ -1,161 +1,139 @@
+using System.Collections;
 using UnityEngine;
-using TMPro;
 
 public class GunSystem : MonoBehaviour
 {
-    //Gun stats
-    public int damage;
-    public PlayerMotor Motor;
-    public float timeBetweenShooting, spread, range, reloadTime, timeBetweenShots;
-    public int magazineSize, bulletsPerTap;
-    public bool allowButtonHold;
-    int bulletsLeft, bulletsShot;
-    public int ammoReserves = 150;
-    public int ammoReservesModifier;
-    public int shotsFired;
-    public float sprayMulti;
-    public float sprayTimer = 0f;
-    public float recoilResetTime = 1f;
+    public GameObject bulletPrefab;
+    public Transform bulletSpawn;
+    public float bulletSpeed = 100f;
+    public float fireRate = 0.1f;
+    public float sprayAngle = 5f;
+    public float adsSpeed = 10f;
+    public Vector3 recoilKick = new Vector3(0f, 0.2f, -0.5f);
+    public float recoilDuration = 0.1f;
+    public float ADSMulti = 2f;
 
+    private bool isFiring = false;
+    private bool isADS = false;
+    private float fireTimer = 0f;
 
-    public enum moveTypeData //enum to define move 
+    private Vector3 initialPosition;
+    private Quaternion initialRotation;
+    private Vector3 targetPosition;
+    private Quaternion targetRotation;
+
+    private void Start()
     {
-        Walk,
-        Run,
-        Jump,
-        Crouch
-    };
-
-    public moveTypeData moveType;
-
-    //bools 
-    public bool shooting, readyToShoot, reloading;
-
-    //Reference
-    public Camera playerCam;
-    public Transform recoilPoint;
-    public Transform attackPoint;
-    public RaycastHit rayHit;
-     
-    
-    // Fixed recoil pattern
-    public Vector2[] recoilPattern;
-    private int recoilIndex = 0;
-
-    //Graphics
-    public GameObject muzzleFlash, bulletHoleGraphic;
-
-    public TextMeshProUGUI text;
-
-    private void Awake()
-    {
-        bulletsLeft = magazineSize;
-        readyToShoot = true;
+        // Store initial position and rotation for smooth ADS transition
+        initialPosition = transform.localPosition;
+        initialRotation = transform.localRotation;
     }
 
     private void Update()
     {
-        MyInput();
-       
-
-        //(sprayTimer);
-
-        // Counting time between last bullet shot
-        if (sprayTimer < recoilResetTime && readyToShoot == true)
+        if (Input.GetButtonDown("Fire1"))
         {
-            sprayTimer += Time.deltaTime;
+            StartFiring();
         }
-        else if(readyToShoot == false)
+        else if (Input.GetButtonUp("Fire1"))
         {
-            sprayTimer = 0f;
-            
+            StopFiring();
+        }
+
+        if (Input.GetButtonDown("Fire2"))
+        {
+            ToggleADS();
+        }
+
+        if (isFiring)
+        {
+            fireTimer += Time.deltaTime;
+            if (fireTimer >= fireRate)
+            {
+                Fire();
+                fireTimer = 0f;
+            }
+        }
+
+        // Smoothly transition between ADS and non-ADS states
+        if (isADS)
+        {
+            transform.localPosition = Vector3.Lerp(transform.localPosition, targetPosition, Time.deltaTime * adsSpeed);
+            transform.localRotation = Quaternion.Lerp(transform.localRotation, targetRotation, Time.deltaTime * adsSpeed);
         }
         else
         {
-            recoilIndex = 0; // Reset the recoil pattern after recoilResetTime seconds of not shooting
+            transform.localPosition = Vector3.Lerp(transform.localPosition, initialPosition, Time.deltaTime * adsSpeed);
+            transform.localRotation = Quaternion.Lerp(transform.localRotation, initialRotation, Time.deltaTime * adsSpeed);
         }
-        //Set ammo Counter
-        text.SetText(bulletsLeft + " / " + ammoReserves);
     }
 
-    private void MyInput()
+    private void StartFiring()
     {
-        if (allowButtonHold) shooting = Input.GetKey(KeyCode.Mouse0);
-        else shooting = Input.GetKeyDown(KeyCode.Mouse0);
+        isFiring = true;
+    }
 
-        if (Input.GetKeyDown(KeyCode.R) && bulletsLeft < magazineSize && !reloading) Reload();
+    private void StopFiring()
+    {
+        isFiring = false;
+    }
 
-        //Shoot
-        if (readyToShoot && shooting && !reloading && bulletsLeft > 0)
+    private void ToggleADS()
+    {
+        isADS = !isADS;
+
+        // Adjust gun properties based on ADS state
+        if (isADS)
         {
-            bulletsShot = bulletsPerTap;
-            Shoot();
+            // Example: Reduce spray angle when ADS
+            sprayAngle /= ADSMulti;
+
+            // Set target position and rotation for ADS
+            targetPosition = new Vector3(-0.251f, 0.007f, -0.1f);
+            targetRotation = Quaternion.Euler(0f, 0f, 1f);
         }
-    }
-
-    private void Shoot()
-    {
-        readyToShoot = false;
-
-        shotsFired = magazineSize - bulletsLeft;
-
-        // Get the next value in the recoil pattern
-        Vector2 recoilOffset = recoilPoint.transform.position;
-        print(recoilOffset);
-        if (recoilPattern.Length > 0)
+        else
         {
-            recoilOffset = recoilPattern[recoilIndex];
-            recoilIndex = (recoilIndex + 1) % recoilPattern.Length;
+            // Example: Reset spray angle when not ADS
+            sprayAngle *= ADSMulti;
+
+            // Reset target position and rotation to initial values
+            targetPosition = initialPosition;
+            targetRotation = initialRotation;
         }
-
-        // Calculate the shoot direction relative to the camera
-        Vector3 cameraForward = playerCam.transform.forward;
-        Vector3 cameraRight = playerCam.transform.right;
-        Vector3 shootDirection = cameraForward + cameraRight * recoilOffset.x * sprayMulti + playerCam.transform.up * recoilOffset.y * sprayMulti;
-        shootDirection.Normalize();
-        playerCam.gameObject.transform.LookAt(playerCam.transform.position + shootDirection);
-
-        Ray ray = new Ray(playerCam.transform.position, shootDirection);
-
-        if (Physics.Raycast(ray, out rayHit, range))
-        {
-            //if (rayHit.collider.CompareTag("Enemy"))
-            //{
-            // Add damage to enemy here
-            //}
-        }
-
-        //Graphics
-        Instantiate(bulletHoleGraphic, rayHit.point, Quaternion.Euler(0, 180, 0));
-
-
-        bulletsLeft--;
-        bulletsShot--;
-
-        Invoke("ResetShot", timeBetweenShooting);
-
-        if (bulletsShot > 0 && bulletsLeft > 0)
-            Invoke("Shoot", timeBetweenShots);
     }
 
-
-    private void ResetShot()
+    private void Fire()
     {
-        readyToShoot = true;
+        // Calculate the randomized spray angle
+        Quaternion sprayRotation = Quaternion.Euler(Random.Range(-sprayAngle, sprayAngle), Random.Range(-sprayAngle, sprayAngle), 0f);
+
+        // Instantiate the bullet
+        GameObject bullet = Instantiate(bulletPrefab, bulletSpawn.position, bulletSpawn.rotation * sprayRotation);
+
+        // Apply force to the bullet
+        Rigidbody bulletRigidbody = bullet.GetComponent<Rigidbody>();
+        bulletRigidbody.velocity = bullet.transform.forward * bulletSpeed;
+
+        // Apply visual recoil kick
+        StartCoroutine(RecoilKick());
     }
-    private void Reload()
+
+    private IEnumerator RecoilKick()
     {
-        reloading = true;
-        Invoke("ReloadFinished", reloadTime);
+        // Save the initial position and rotation
+        Vector3 initialGunPosition = transform.localPosition;
+        Quaternion initialGunRotation = transform.localRotation;
 
-    }
+        // Apply recoil kick
+        transform.localPosition += recoilKick;
+        yield return new WaitForSeconds(recoilDuration);
 
-
-    private void ReloadFinished()
-    {
-        bulletsLeft = magazineSize;
-        reloading = false;
-        ammoReserves = ammoReserves - shotsFired;
-        shotsFired = 0;
+        // Reset to initial position and rotation
+        transform.localPosition = initialGunPosition;
+        transform.localRotation = initialGunRotation;
     }
 }
+
+
+
