@@ -31,16 +31,16 @@ public class GunSystem : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetButtonDown("Fire1"))
+        if (Input.GetKeyDown(KeyCode.Mouse0))
         {
             StartFiring();
         }
-        else if (Input.GetButtonUp("Fire1"))
+        else if (Input.GetKeyUp(KeyCode.Mouse0))
         {
             StopFiring();
         }
 
-        if (Input.GetButtonDown("Fire2"))
+        if (Input.GetKeyDown(KeyCode.Mouse1))
         {
             ToggleADS();
         }
